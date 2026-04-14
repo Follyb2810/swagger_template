@@ -359,16 +359,5 @@ Then reuse:
 
 ---
 
-# 🔥 BONUS (your Zealy style tip)
 
-For your project:
-
-You should always structure like:
-
-```
-Users
-Quests
-Leaderboard
-XP
-Admin
 ```
