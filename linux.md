@@ -401,5 +401,124 @@ I can teach you:
 - Setup **production server (NGINX + Docker + SSL)**
 - Build **CI/CD pipelines**
 - Advanced bash scripting
+---
 
-Just say 👍
+# ✅ 1. First: Check if Coturn is running
+
+On your server:
+
+```bash
+sudo systemctl status coturn
+```
+
+You want to see:
+
+```
+active (running)
+```
+
+If not, check logs:
+
+```bash
+sudo journalctl -u coturn
+```
+
+---
+
+# 🌐 2. Test with a WebRTC tool (best method)
+
+Use Trickle ICE in your browser.
+
+### Enter:
+
+* **STUN/TURN URI:**
+
+  ```
+  turn:YOUR_SERVER_IP:3478
+  ```
+* **Username:** `testuser`
+* **Password:** `testpassword`
+
+Click **"Gather Candidates"**
+
+---
+
+## ✅ What success looks like:
+
+You should see **relay candidates**, something like:
+
+```
+relay  YOUR_SERVER_IP  ...
+```
+
+👉 That **“relay”** keyword is critical
+
+* `host` = local network
+* `srflx` = STUN working
+* ✅ `relay` = TURN working (this is what you want)
+
+---
+
+## ❌ If you don’t see "relay"
+
+Here’s what’s likely wrong:
+
+### 1. Firewall blocking UDP (VERY common on DigitalOcean)
+
+Make sure:
+
+* UDP 3478 is open
+* Relay ports are open (important!)
+
+Example:
+
+```bash
+sudo ufw allow 3478/udp
+sudo ufw allow 10000:20000/udp
+```
+
+Also check DigitalOcean **cloud firewall** if enabled.
+
+---
+
+### 2. Wrong external IP
+
+DigitalOcean droplets usually have a public IP.
+
+Make sure in config:
+
+```ini
+external-ip=YOUR_PUBLIC_IP
+```
+
+---
+
+### 3. Coturn not binding properly
+
+Check logs:
+
+```bash
+sudo tail -f /var/log/turn.log
+```
+
+You should see activity when testing.
+
+---
+
+# 🧪 3. Deeper Test (Real WebRTC App)
+
+If you're building video/chat:
+
+* Open your app in **two different networks**
+
+  * e.g., mobile data vs WiFi
+* If connection only works with TURN → it's working
+
+---
+
+# ⚡ Quick sanity checklist
+
+* [ ] Coturn service running
+* [ ] Ports open (server + DigitalOcean firewall)
+* [ ] Correct IP in config
+* [ ] Seeing **relay** in Trickle ICE
