@@ -882,3 +882,501 @@ WHERE email IS NOT NULL;
 ```
 
 ---
+
+Good catch. SQL isn’t just querying tables; a big part of real database work is modeling relationships correctly and knowing how CRUD operations work across them.
+
+Since you asked earlier for PostgreSQL, I’ll use PostgreSQL examples.
+
+---
+
+# PostgreSQL Relationships Guide
+
+We’ll cover:
+
+1. **One-to-One**
+2. **One-to-Many**
+3. **Many-to-Many**
+
+For each:
+
+- create tables
+- insert data
+- update
+- delete
+
+---
+
+# 1. One-to-One Relationship
+
+Example:
+
+- One user has one profile
+
+---
+
+## Create Tables
+
+```sql
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL
+);
+```
+
+```sql
+CREATE TABLE profiles (
+    id SERIAL PRIMARY KEY,
+    user_id INT UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    bio TEXT,
+    avatar TEXT
+);
+```
+
+### Why `UNIQUE`?
+
+Because one profile can only belong to one user.
+
+---
+
+## Insert Data
+
+Insert user:
+
+```sql
+INSERT INTO users (name)
+VALUES ('John')
+RETURNING id;
+```
+
+Suppose returns `1`
+
+Insert profile:
+
+```sql
+INSERT INTO profiles (user_id, bio, avatar)
+VALUES (1, 'Backend developer', 'avatar.jpg');
+```
+
+---
+
+## Read Data
+
+```sql
+SELECT u.id, u.name, p.bio
+FROM users u
+JOIN profiles p ON u.id = p.user_id;
+```
+
+---
+
+## Update Profile
+
+```sql
+UPDATE profiles
+SET bio = 'Senior backend developer'
+WHERE user_id = 1;
+```
+
+---
+
+## Delete User + Profile
+
+Because of `ON DELETE CASCADE`:
+
+```sql
+DELETE FROM users
+WHERE id = 1;
+```
+
+Deletes:
+
+- user
+- profile automatically
+
+---
+
+---
+
+# 2. One-to-Many Relationship
+
+Example:
+
+- One user has many orders
+
+---
+
+## Create Tables
+
+```sql
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL
+);
+```
+
+```sql
+CREATE TABLE orders (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    amount NUMERIC NOT NULL
+);
+```
+
+---
+
+## Insert Data
+
+Insert user:
+
+```sql
+INSERT INTO users (name)
+VALUES ('John')
+RETURNING id;
+```
+
+Insert multiple orders:
+
+```sql
+INSERT INTO orders (user_id, amount)
+VALUES
+(1, 100),
+(1, 250),
+(1, 75);
+```
+
+---
+
+## Read User Orders
+
+```sql
+SELECT u.name, o.amount
+FROM users u
+JOIN orders o ON u.id = o.user_id
+WHERE u.id = 1;
+```
+
+---
+
+## Update Order
+
+```sql
+UPDATE orders
+SET amount = 300
+WHERE id = 2;
+```
+
+---
+
+## Delete Single Order
+
+```sql
+DELETE FROM orders
+WHERE id = 2;
+```
+
+---
+
+## Delete User + All Orders
+
+```sql
+DELETE FROM users
+WHERE id = 1;
+```
+
+Because of cascade:
+
+- deletes all related orders
+
+---
+
+---
+
+# 3. Many-to-Many Relationship
+
+Example:
+
+- Students can join many courses
+- Courses have many students
+
+Need a **junction table**.
+
+---
+
+## Create Tables
+
+Students:
+
+```sql
+CREATE TABLE students (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL
+);
+```
+
+Courses:
+
+```sql
+CREATE TABLE courses (
+    id SERIAL PRIMARY KEY,
+    title TEXT NOT NULL
+);
+```
+
+Junction table:
+
+```sql
+CREATE TABLE student_courses (
+    student_id INT REFERENCES students(id) ON DELETE CASCADE,
+    course_id INT REFERENCES courses(id) ON DELETE CASCADE,
+    PRIMARY KEY (student_id, course_id)
+);
+```
+
+---
+
+## Insert Data
+
+Student:
+
+```sql
+INSERT INTO students (name)
+VALUES ('Alice');
+```
+
+Course:
+
+```sql
+INSERT INTO courses (title)
+VALUES ('Database Design');
+```
+
+Assign student to course:
+
+```sql
+INSERT INTO student_courses (student_id, course_id)
+VALUES (1, 1);
+```
+
+---
+
+## Add More Relationships
+
+Student joins another course:
+
+```sql
+INSERT INTO student_courses (student_id, course_id)
+VALUES (1, 2);
+```
+
+---
+
+Another student joins same course:
+
+```sql
+INSERT INTO student_courses (student_id, course_id)
+VALUES (2, 1);
+```
+
+---
+
+## Read Relationships
+
+```sql
+SELECT s.name, c.title
+FROM student_courses sc
+JOIN students s ON sc.student_id = s.id
+JOIN courses c ON sc.course_id = c.id;
+```
+
+---
+
+## Update Relationship
+
+Move student from one course to another:
+
+```sql
+UPDATE student_courses
+SET course_id = 3
+WHERE student_id = 1
+AND course_id = 2;
+```
+
+---
+
+## Delete Relationship Only
+
+Remove student from course:
+
+```sql
+DELETE FROM student_courses
+WHERE student_id = 1
+AND course_id = 1;
+```
+
+This does NOT delete:
+
+- student
+- course
+
+Only relation removed.
+
+---
+
+## Delete Student
+
+```sql
+DELETE FROM students
+WHERE id = 1;
+```
+
+Deletes:
+
+- student
+- all related student_courses rows
+
+---
+
+---
+
+# 4. Relationship Constraints
+
+Useful additions:
+
+---
+
+## Prevent duplicates
+
+Already handled here:
+
+```sql
+PRIMARY KEY (student_id, course_id)
+```
+
+Prevents:
+
+- duplicate student-course pairs
+
+---
+
+## Set NULL instead of delete
+
+Instead of cascade:
+
+```sql
+REFERENCES users(id) ON DELETE SET NULL
+```
+
+Deletes parent, keeps child.
+
+Example:
+
+- user deleted
+- orders remain
+
+---
+
+## Restrict delete
+
+```sql
+REFERENCES users(id) ON DELETE RESTRICT
+```
+
+Prevents deleting parent if children exist.
+
+---
+
+---
+
+# 5. Real Production Pattern
+
+Common backend schema:
+
+### One-to-One
+
+- users ↔ profiles
+- users ↔ settings
+
+### One-to-Many
+
+- users → orders
+- users → posts
+- companies → employees
+
+### Many-to-Many
+
+- users ↔ roles
+- posts ↔ tags
+- students ↔ courses
+
+---
+
+# 6. Best Practices
+
+### Use cascade carefully
+
+Good:
+
+```sql
+ON DELETE CASCADE
+```
+
+For:
+
+- profiles
+- sessions
+- pivot tables
+
+Be careful for:
+
+- payments
+- invoices
+- audit logs
+
+You often don’t want those auto-deleted.
+
+---
+
+### Index foreign keys
+
+```sql
+CREATE INDEX idx_orders_user_id
+ON orders(user_id);
+```
+
+Important for joins.
+
+---
+
+# Final Mental Model
+
+### One-to-One
+
+Child foreign key is:
+
+- unique
+
+---
+
+### One-to-Many
+
+Child foreign key:
+
+- not unique
+
+---
+
+### Many-to-Many
+
+Use junction table.
+
+---
+
+## Quick Summary
+
+| Relationship | Structure            |
+| ------------ | -------------------- |
+| One-to-One   | foreign key + UNIQUE |
+| One-to-Many  | foreign key          |
+| Many-to-Many | junction table       |
+
+---
